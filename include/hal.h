@@ -18,4 +18,6 @@ void hal_setup();
 // Gestiona los eventos del sistema (Cerrar ventana en PC, etc)
 void hal_loop();
 
+void hal_get_time(int *h, int *m);
+
 #endif

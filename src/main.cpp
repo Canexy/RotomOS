@@ -2,14 +2,11 @@
 #include "ui.h"
 #include "system_data.h"
 
-// --- TRADUCTOR DE TIEMPO PARA PC ---
 #ifndef ESP32
     #define millis SDL_GetTicks
 #endif
 
-// AQUÍ vive la variable de verdad (la embajada)
 SystemState myStatus; 
-
 uint32_t last_sim_time = 0;
 
 void setup() {
@@ -20,14 +17,23 @@ void setup() {
 void loop() {
     hal_loop();
     
-    // Solo actualizamos la lógica si ha pasado tiempo
-    if (millis() - last_sim_time > 1000) {
-        myStatus.steps += 1; // Un paso por segundo para no volvernos locos
-        last_sim_time = millis();
+    uint32_t now = millis();
+    if (now - last_sim_time > 1000) {
+        // 1. Actualizamos Pasos
+        myStatus.steps += 1; 
+
+        // 2. Actualizamos la Hora Real
+        int h, m;
+        hal_get_time(&h, &m); // Pedimos hora al HAL
+        char time_buf[10];
+        snprintf(time_buf, sizeof(time_buf), "%02d:%02d", h, m);
+        ui_set_time(time_buf); // Se la enviamos a la UI
+
+        last_sim_time = now;
     }
 
-    lv_timer_handler(); // <--- Esta función es la que "pinta"
-    SDL_Delay(5);       // <--- Pausa necesaria para que el procesador respire
+    lv_timer_handler(); 
+    SDL_Delay(5);
 }
 
 #ifndef ESP32

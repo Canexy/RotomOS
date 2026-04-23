@@ -1,5 +1,6 @@
 #include "hal.h"
 #include <stdlib.h>
+#include <time.h> // <--- Añadido para el tiempo del PC
 
 static lv_disp_draw_buf_t draw_buf;
 static lv_color_t *buf;
@@ -51,6 +52,20 @@ void monitor_flush(lv_disp_drv_t * disp_drv, const lv_area_t * area, lv_color_t 
 }
 #endif
 
+void hal_get_time(int *h, int *m) {
+#ifdef ESP32
+    *h = 12; 
+    *m = 0;
+#else
+    time_t rawtime;
+    struct tm * timeinfo;
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    *h = timeinfo->tm_hour; // Usando h
+    *m = timeinfo->tm_min;  // Usando m
+#endif
+}
+
 void hal_setup() {
     lv_init();
     uint32_t buffer_pixels;
@@ -58,15 +73,19 @@ void hal_setup() {
 #ifdef ESP32
     tft.init();
     tft.setBrightness(128);
-    buffer_pixels = 240 * 40;
+    // 1. BUFFER DE SEGURIDAD PARA RELOJ REAL (466 * 40)
+    buffer_pixels = 466 * 40; 
     buf = (lv_color_t *)ps_malloc(buffer_pixels * sizeof(lv_color_t));
 #else
     SDL_SetMainReady();
     SDL_Init(SDL_INIT_VIDEO);
-    window = SDL_CreateWindow("VPet S3 Emulator", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 240, 240, 0);
+    // 2. RESOLUCIÓN REAL EN EMULADOR
+    window = SDL_CreateWindow("RotomOS 466px", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 466, 466, 0);
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, 240, 240);
-    buffer_pixels = 240 * 240;
+    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, 466, 466);
+    
+    // BUFFER COMPLETO PARA PC
+    buffer_pixels = 466 * 466;
     buf = (lv_color_t *)malloc(buffer_pixels * sizeof(lv_color_t));
 #endif
 
@@ -74,8 +93,8 @@ void hal_setup() {
 
     static lv_disp_drv_t disp_drv;
     lv_disp_drv_init(&disp_drv);
-    disp_drv.hor_res = 240;
-    disp_drv.ver_res = 240;
+    disp_drv.hor_res = 466;
+    disp_drv.ver_res = 466;
 
 #ifdef ESP32
     disp_drv.flush_cb = my_disp_flush;
@@ -87,7 +106,6 @@ void hal_setup() {
     lv_disp_drv_register(&disp_drv);
 
 #ifndef ESP32
-    // REGISTRO DEL RATÓN (Indispensable para que el botón y el drag funcionen)
     static lv_indev_drv_t indev_drv;
     lv_indev_drv_init(&indev_drv);
     indev_drv.type = LV_INDEV_TYPE_POINTER;
