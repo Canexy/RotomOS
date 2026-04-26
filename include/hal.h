@@ -12,12 +12,13 @@
     #include <SDL2/SDL.h>
 #endif
 
-// Inicializa TODO el hardware (Pantalla, LVGL, Memoria)
 void hal_setup();
-
-// Gestiona los eventos del sistema (Cerrar ventana en PC, etc)
 void hal_loop();
-
 void hal_get_time(int *h, int *m);
+
+// --- Nuevas funciones de sensores ---
+uint32_t hal_get_steps();
+int hal_get_battery();
+void hal_update_sensors(); // Se llama en cada loop para procesar hardware
 
 #endif

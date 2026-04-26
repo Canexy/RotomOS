@@ -7,7 +7,8 @@
 #endif
 
 SystemState myStatus; 
-uint32_t last_sim_time = 0;
+uint32_t last_ui_tick = 0;
+uint32_t last_vpet_tick = 0;
 
 void setup() {
     hal_setup();
@@ -16,24 +17,41 @@ void setup() {
 
 void loop() {
     hal_loop();
+    hal_update_sensors();
     
     uint32_t now = millis();
-    if (now - last_sim_time > 1000) {
-        // 1. Actualizamos Pasos
-        myStatus.steps += 1; 
 
-        // 2. Actualizamos la Hora Real
+    // Actualización rápida (UI y Tiempo)
+    if (now - last_ui_tick > 1000) {
+        myStatus.steps = hal_get_steps();
+        myStatus.battery = hal_get_battery();
+        
         int h, m;
-        hal_get_time(&h, &m); // Pedimos hora al HAL
-        char time_buf[10];
-        snprintf(time_buf, sizeof(time_buf), "%02d:%02d", h, m);
-        ui_set_time(time_buf); // Se la enviamos a la UI
+        hal_get_time(&h, &m);
+        myStatus.hour = h; myStatus.minute = m;
 
-        last_sim_time = now;
+        char buf[10];
+        snprintf(buf, sizeof(buf), "%02d:%02d", h, m);
+        ui_set_time(buf);
+        ui_update_steps();
+        ui_update_vpet();
+        
+        last_ui_tick = now;
+    }
+
+    // Lógica de vida (Hambre cada 10 segundos)
+    if (now - last_vpet_tick > 10000) {
+        if(myStatus.hunger > 0) myStatus.hunger -= 2;
+        if(myStatus.hunger < 20 && myStatus.happiness > 0) myStatus.happiness--;
+        
+        last_vpet_tick = now;
     }
 
     lv_timer_handler(); 
+
+#ifndef ESP32
     SDL_Delay(5);
+#endif
 }
 
 #ifndef ESP32
