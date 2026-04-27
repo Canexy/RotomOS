@@ -9,16 +9,24 @@
 SystemState myStatus;
 static uint32_t last_ui_refresh = 0;
 static uint32_t last_logic_refresh = 0;
+bool screen_on = true;
 
+// --- FUNCIÓN QUE FALTABA: Lógica del Pokémon ---
 void process_vpet_logic() {
-    // Simulación de degradación de stats
+    // 1. El hambre baja poco a poco
     if (myStatus.hunger > 0) myStatus.hunger -= 1;
+    
+    // 2. Ganancia de nivel por pasos (simulada)
     if (myStatus.steps % 50 == 0 && myStatus.steps > 0) {
         myStatus.exp += 10;
-        if (myStatus.exp >= 100) { myStatus.level++; myStatus.exp = 0; }
+        if (myStatus.exp >= 100) { 
+            myStatus.level++; 
+            myStatus.exp = 0; 
+        }
     }
 }
 
+// --- Actualización de datos en pantalla ---
 void update_display_data() {
     int h, m;
     hal_get_time(&h, &m);
@@ -26,7 +34,7 @@ void update_display_data() {
     myStatus.battery = hal_get_battery();
     myStatus.steps = hal_get_steps();
 
-    char buf[8];
+    char buf[10];
     snprintf(buf, sizeof(buf), "%02d:%02d", h, m);
     ui_set_time(buf);
     ui_update_steps();
@@ -44,13 +52,26 @@ void loop() {
 
     uint32_t now = millis();
 
-    // Refresh de UI (1 segundo)
-    if (now - last_ui_refresh > 1000) {
+    // Lógica de Timeout (5 segundos)
+    if (lv_disp_get_inactive_time(NULL) > 5000) {
+        if (screen_on) {
+            ui_set_sleep_mode(true); // Usamos la nueva capa negra
+            screen_on = false;
+        }
+    } else {
+        if (!screen_on) {
+            ui_set_sleep_mode(false);
+            screen_on = true;
+        }
+    }
+
+    // Refresh de UI (solo si el sistema ya cargó y la pantalla está on)
+    if (now - last_ui_refresh > 1000 && screen_on) {
         update_display_data();
         last_ui_refresh = now;
     }
 
-    // Lógica VPet (5 segundos para pruebas)
+    // Lógica VPet cada 5 segundos
     if (now - last_logic_refresh > 5000) {
         process_vpet_logic();
         last_logic_refresh = now;
