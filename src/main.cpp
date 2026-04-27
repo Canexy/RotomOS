@@ -30,6 +30,11 @@ void process_vpet_logic() {
 void update_display_data() {
     int h, m;
     hal_get_time(&h, &m);
+
+    if (h == 0 && m == 0 && myStatus.steps != 0) {
+            myStatus.steps = 0;
+        }
+
     myStatus.hour = h; myStatus.minute = m;
     myStatus.battery = hal_get_battery();
     myStatus.steps = hal_get_steps();
