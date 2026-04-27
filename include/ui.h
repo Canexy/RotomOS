@@ -7,6 +7,7 @@ void ui_init();
 void ui_set_time(const char * time_str);
 void ui_update_vpet();
 void ui_update_steps();
-void ui_set_sleep_mode(bool sleep); // Nueva
+void ui_set_sleep_mode(bool sleep);
+void ui_update_pkm_image(); // Nueva función para la evolución
 
 #endif

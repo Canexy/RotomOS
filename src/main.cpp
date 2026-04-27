@@ -11,29 +11,36 @@ static uint32_t last_ui_refresh = 0;
 static uint32_t last_logic_refresh = 0;
 bool screen_on = true;
 
-// --- FUNCIÓN QUE FALTABA: Lógica del Pokémon ---
 void process_vpet_logic() {
-    // 1. El hambre baja poco a poco
     if (myStatus.hunger > 0) myStatus.hunger -= 1;
+
+    // --- TEST DE EVOLUCIÓN ---
+    // Nivel 1: Cosmog (0-99 pasos)
+    // Nivel 2: Cosmoem (100-199 pasos) -> Evolución!
+    // Nivel 3: Lunala (200+ pasos) -> Evolución!
     
-    // 2. Ganancia de nivel por pasos (simulada)
-    if (myStatus.steps % 50 == 0 && myStatus.steps > 0) {
-        myStatus.exp += 10;
-        if (myStatus.exp >= 100) { 
-            myStatus.level++; 
-            myStatus.exp = 0; 
-        }
+    int new_level = 1;
+    if (myStatus.steps >= 10) new_level = 3; // 200
+    else if (myStatus.steps >= 5) new_level = 2; //100
+
+    if (new_level != myStatus.level) {
+        myStatus.level = new_level;
+        // Cambiamos el nombre internamente
+        if (myStatus.level == 1) snprintf(myStatus.pkm_name, 12, "Cosmog");
+        if (myStatus.level == 2) snprintf(myStatus.pkm_name, 12, "Cosmoem");
+        if (myStatus.level == 3) snprintf(myStatus.pkm_name, 12, "Lunala");
+        
+        ui_update_pkm_image(); // Ordenamos a la UI cambiar la foto
     }
 }
 
-// --- Actualización de datos en pantalla ---
 void update_display_data() {
     int h, m;
     hal_get_time(&h, &m);
 
     if (h == 0 && m == 0 && myStatus.steps != 0) {
-            myStatus.steps = 0;
-        }
+        myStatus.steps = 0;
+    }
 
     myStatus.hour = h; myStatus.minute = m;
     myStatus.battery = hal_get_battery();

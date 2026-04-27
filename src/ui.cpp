@@ -6,12 +6,26 @@ static lv_obj_t * tv;
 static lv_obj_t * t_home, * t_settings, * t_widgets, * t_notifs, * t_menu;
 static lv_obj_t * time_label, * level_label, * batt_label; 
 static lv_obj_t * hunger_bar, * happy_bar, * steps_arc;
+static lv_obj_t * pkm_img; // El objeto de imagen ahora es estático para poder actualizarlo
 static lv_obj_t * sleep_overlay, * flashlight_obj;
 
-LV_IMG_DECLARE(pkm_sprite);
+// --- DECLARACIÓN DE IMÁGENES ---
+LV_IMG_DECLARE(cosmog_sprite);  // Renombrado de pkm_sprite
+LV_IMG_DECLARE(cosmoem_sprite); 
+LV_IMG_DECLARE(lunala_sprite);  
 LV_IMG_DECLARE(boot_img);
 
 void ui_create_main_system();
+
+// --- LÓGICA DE EVOLUCIÓN (Cambio de imagen) ---
+void ui_update_pkm_image() {
+    if (!pkm_img) return;
+
+    // Cambiamos la fuente de la imagen según el nivel definido en main.cpp
+    if (myStatus.level == 1) lv_img_set_src(pkm_img, &cosmog_sprite);
+    else if (myStatus.level == 2) lv_img_set_src(pkm_img, &cosmoem_sprite);
+    else if (myStatus.level == 3) lv_img_set_src(pkm_img, &lunala_sprite);
+}
 
 // --- EVENTOS ---
 static void flashlight_off_event_cb(lv_event_t * e) { lv_obj_add_flag(flashlight_obj, LV_OBJ_FLAG_HIDDEN); }
@@ -56,9 +70,9 @@ void ui_create_main_system() {
     lv_obj_set_style_text_color(time_label, lv_color_white(), 0);
     lv_obj_align(time_label, LV_ALIGN_TOP_MID, 0, 65);
 
-    // 2. Anillo de Pasos (Centro-Bajo)
+    // 2. Anillo de Pasos (Independiente)
     steps_arc = lv_arc_create(t_home);
-    lv_obj_set_size(steps_arc, 300, 300);
+    lv_obj_set_size(steps_arc, 320, 320); // 300 y 300 originalmente; ajuste estético personal
     lv_arc_set_rotation(steps_arc, 135);
     lv_arc_set_bg_angles(steps_arc, 0, 270);
     lv_arc_set_value(steps_arc, 0);
@@ -67,18 +81,16 @@ void ui_create_main_system() {
     lv_obj_set_style_arc_color(steps_arc, lv_color_make(40, 40, 40), LV_PART_MAIN);
     lv_obj_set_style_arc_color(steps_arc, lv_color_make(255, 200, 0), LV_PART_INDICATOR);
     lv_obj_remove_style(steps_arc, NULL, LV_PART_KNOB);
-    lv_obj_align(steps_arc, LV_ALIGN_CENTER, 0, 45);
-    
-    // FIX: El anillo ahora es puramente visual, no reacciona al toque
+    lv_obj_align(steps_arc, LV_ALIGN_CENTER, 0, 50); // 45 originalmente; ajuste estético personal
     lv_obj_clear_flag(steps_arc, LV_OBJ_FLAG_CLICKABLE);
 
-    // 3. Sprite de Cosmog (Dentro del anillo)
-    lv_obj_t * pkm_img = lv_img_create(t_home);
-    lv_img_set_src(pkm_img, &pkm_sprite);
+    // 3. Sprite del Pokémon (Independiente)
+    pkm_img = lv_img_create(t_home);
+    lv_img_set_src(pkm_img, &cosmog_sprite); // Imagen inicial
     lv_obj_set_size(pkm_img, 240, 240);
-    lv_obj_align_to(pkm_img, steps_arc, LV_ALIGN_CENTER, 0, 0);
     
-    // FIX: Cosmog ya no es clicable (a petición del usuario)
+    // Al usar lv_obj_align en lugar de lv_obj_align_to, el sprite es independiente del arco
+    lv_obj_align(pkm_img, LV_ALIGN_CENTER, 0, 45); // Altura ajustable del sprite
     lv_obj_clear_flag(pkm_img, LV_OBJ_FLAG_CLICKABLE);
 
     // --- PANTALLA AJUSTES (IZQUIERDA: 0,1) ---
@@ -118,7 +130,7 @@ void ui_create_main_system() {
     lv_obj_add_event_cb(lb, flashlight_on_event_cb, LV_EVENT_CLICKED, NULL);
     add_q_btn("ECO", lv_color_make(0, 150, 0));
 
-    // --- PANTALLA STATS/PKM DATA (DERECHA: 2,1) ---
+    // --- PANTALLA STATS (DERECHA: 2,1) ---
     lv_obj_t * widget_cont = lv_obj_create(t_widgets);
     lv_obj_set_size(widget_cont, 360, 360);
     lv_obj_center(widget_cont);
@@ -143,8 +155,6 @@ void ui_create_main_system() {
 
     create_bar(&hunger_bar, "Hambre:", 90, lv_color_make(255, 50, 50));
     create_bar(&happy_bar, "Amistad:", 170, lv_color_make(50, 255, 50));
-
-    // FIX: Se ha eliminado steps_label de esta pantalla para evitar redundancia
 
     // --- PANTALLA MENÚ (ABAJO: 1,2) ---
     lv_obj_t * menu_cont = lv_obj_create(t_menu);
@@ -193,6 +203,7 @@ void ui_create_main_system() {
     lv_obj_update_layout(tv);
     lv_obj_set_tile_id(tv, 1, 1, LV_ANIM_OFF);
     ui_update_vpet();
+    ui_update_pkm_image(); // Sincroniza imagen inicial
     lv_scr_load_anim(main_screen, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, true);
 }
 
