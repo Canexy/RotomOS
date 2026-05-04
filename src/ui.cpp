@@ -1,26 +1,23 @@
 #include "ui.h"
 #include "system_data.h"
+#include "app_manager.h"
 #include <cstdio>
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PALETA
 // ═══════════════════════════════════════════════════════════════════════════
-#define C_BLACK   lv_color_hex(0x000000)   // AMOLED — fondo global
-#define C_BG2     lv_color_hex(0x0E0E12)   // fondo tarjeta (casi negro)
-#define C_RED     lv_color_hex(0xCB3D2B)   // acento principal
-#define C_BLUE_L  lv_color_hex(0x9BD8E9)   // azul claro secundario
-#define C_BG_NAV  lv_color_hex(0x2C3C48)   // marino — fondos de botones
-#define C_RED_D   lv_color_hex(0x6A302B)   // burdeos — hambre
-#define C_BLUE_M  lv_color_hex(0x6B9EAA)   // azul acero — felicidad
-#define C_ROSE    lv_color_hex(0xC6AEA4)   // beige rosado — especial
-#define C_TRACK   lv_color_hex(0x151515)   // fondo arcos y barras
-#define C_TEXT    lv_color_hex(0xE8E4E0)   // blanco cálido
-#define C_DIM     lv_color_hex(0x5A6A76)   // gris azulado apagado
-
-// Colores del arco de pasos según progreso
-#define C_ARC_LOW  lv_color_hex(0x9BD8E9)  //  0– 49 % → azul claro
-#define C_ARC_MID  lv_color_hex(0xFFD600)  // 50– 99 % → amarillo
-#define C_ARC_DONE lv_color_hex(0x32DC6E)  //     100 % → verde
+#define C_BLACK   lv_color_hex(0x000000)
+#define C_BG2     lv_color_hex(0x0E0E12)
+#define C_RED     lv_color_hex(0xCB3D2B)
+#define C_BLUE_L  lv_color_hex(0x9BD8E9)
+#define C_RED_D   lv_color_hex(0x6A302B)
+#define C_BLUE_M  lv_color_hex(0x6B9EAA)
+#define C_TRACK   lv_color_hex(0x151515)
+#define C_TEXT    lv_color_hex(0xE8E4E0)
+#define C_DIM     lv_color_hex(0x5A6A76)
+#define C_ARC_LOW lv_color_hex(0x9BD8E9)
+#define C_ARC_MID lv_color_hex(0xFFD600)
+#define C_ARC_DONE lv_color_hex(0x32DC6E)
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PUNTEROS
@@ -28,38 +25,40 @@
 static lv_obj_t *tv;
 static lv_obj_t *t_home, *t_settings, *t_widgets, *t_notifs, *t_menu;
 
-// Home
 static lv_obj_t *time_label;
 static lv_obj_t *steps_label;
 static lv_obj_t *steps_arc;
 static lv_obj_t *pkm_img;
 static lv_obj_t *batt_home_label;
-static lv_obj_t *dot_hunger;      // indicador circular estado hambre
-static lv_obj_t *dot_happy;       // indicador circular estado felicidad
+static lv_obj_t *dot_hunger;
+static lv_obj_t *dot_happy;
 
-// Stats
 static lv_obj_t *level_label;
 static lv_obj_t *batt_label;
 static lv_obj_t *hunger_bar;
 static lv_obj_t *happy_bar;
 
-// Sistema
 static lv_obj_t *sleep_overlay;
 static lv_obj_t *flashlight_obj;
+
+static lv_obj_t *shell_screen = nullptr;
 
 LV_IMG_DECLARE(cosmog_sprite);
 LV_IMG_DECLARE(cosmoem_sprite);
 LV_IMG_DECLARE(lunala_sprite);
+LV_IMG_DECLARE(rotom_sprite);
+LV_IMG_DECLARE(pichu_sprite);
 LV_IMG_DECLARE(boot_img);
 
 void ui_create_main_system();
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ANIMACIÓN RESPIRACIÓN (C)
+// ANIMACIÓN RESPIRACIÓN
 // ═══════════════════════════════════════════════════════════════════════════
 static void breathe_cb(void *obj, int32_t v) {
     lv_img_set_zoom((lv_obj_t *)obj, (uint16_t)v);
 }
+
 static void start_breathe_anim(lv_obj_t *img) {
     lv_anim_t a;
     lv_anim_init(&a);
@@ -81,6 +80,8 @@ void ui_update_pkm_image() {
     lv_anim_del(pkm_img, breathe_cb);
     lv_img_set_zoom(pkm_img, 256);
     switch (myStatus.pkm_id) {
+        case 172: lv_img_set_src(pkm_img, &pichu_sprite);   break;
+        case 479: lv_img_set_src(pkm_img, &rotom_sprite);   break;
         case 789: lv_img_set_src(pkm_img, &cosmog_sprite);  break;
         case 790: lv_img_set_src(pkm_img, &cosmoem_sprite); break;
         case 792: lv_img_set_src(pkm_img, &lunala_sprite);  break;
@@ -91,20 +92,13 @@ void ui_update_pkm_image() {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MODAL — OBJETIVO DE PASOS
-// Flota sobre todo usando lv_layer_top(), no pertenece al eje de tiles.
 // ═══════════════════════════════════════════════════════════════════════════
 static lv_obj_t *step_modal = nullptr;
-
-// Opciones de objetivo disponibles
 static const uint32_t step_options[] = {3000, 5000, 7500, 10000, 15000};
-static const int      step_opt_count = 5;
-static int            step_opt_idx   = 1;   // default: 5000
+static int step_opt_idx = 1;
 
 static void modal_close_cb(lv_event_t *) {
-    if (step_modal) {
-        lv_obj_del(step_modal);
-        step_modal = nullptr;
-    }
+    if (step_modal) { lv_obj_del(step_modal); step_modal = nullptr; }
 }
 
 static void modal_confirm_cb(lv_event_t *e) {
@@ -115,9 +109,8 @@ static void modal_confirm_cb(lv_event_t *e) {
 }
 
 static void show_step_goal_modal() {
-    if (step_modal) return; // ya abierto
+    if (step_modal) return;
 
-    // Overlay semitransparente
     step_modal = lv_obj_create(lv_layer_top());
     lv_obj_set_size(step_modal, 466, 466);
     lv_obj_set_style_bg_color(step_modal, lv_color_black(), 0);
@@ -125,7 +118,6 @@ static void show_step_goal_modal() {
     lv_obj_set_style_border_width(step_modal, 0, 0);
     lv_obj_set_style_pad_all(step_modal, 0, 0);
 
-    // Tarjeta central
     lv_obj_t *card = lv_obj_create(step_modal);
     lv_obj_set_size(card, 320, 280);
     lv_obj_center(card);
@@ -140,11 +132,9 @@ static void show_step_goal_modal() {
     lv_obj_set_style_text_color(title, C_BLUE_L, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 16);
 
-    // Roller con las opciones
     lv_obj_t *roller = lv_roller_create(card);
-    lv_roller_set_options(roller,
-        "3,000\n5,000\n7,500\n10,000\n15,000",
-        LV_ROLLER_MODE_NORMAL);
+    lv_roller_set_options(roller, "3,000\n5,000\n7,500\n10,000\n15,000",
+                          LV_ROLLER_MODE_NORMAL);
     lv_roller_set_selected(roller, (uint16_t)step_opt_idx, LV_ANIM_OFF);
     lv_roller_set_visible_row_count(roller, 3);
     lv_obj_set_width(roller, 200);
@@ -154,7 +144,6 @@ static void show_step_goal_modal() {
     lv_obj_set_style_bg_color(roller, lv_color_hex(0x0E1520), 0);
     lv_obj_set_style_border_width(roller, 0, 0);
 
-    // Botones
     lv_obj_t *btn_ok = lv_btn_create(card);
     lv_obj_set_size(btn_ok, 110, 42);
     lv_obj_align(btn_ok, LV_ALIGN_BOTTOM_RIGHT, -12, -12);
@@ -209,11 +198,9 @@ void ui_init() {
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
-
-// Botón circular tipo Galaxy Watch (icono + label)
 static lv_obj_t* make_round_btn(lv_obj_t *parent, const char *ico,
-                                  const char *lbl, lv_color_t bg,
-                                  lv_event_cb_t cb = nullptr) {
+                                 const char *lbl, lv_color_t bg,
+                                 lv_event_cb_t cb = nullptr) {
     lv_obj_t *wrap = lv_obj_create(parent);
     lv_obj_set_style_bg_opa(wrap, 0, 0);
     lv_obj_set_style_border_width(wrap, 0, 0);
@@ -244,12 +231,11 @@ static lv_obj_t* make_round_btn(lv_obj_t *parent, const char *ico,
     return wrap;
 }
 
-// Tarjeta de stat — sin scroll, fija
 static void make_stat_card(lv_obj_t *parent, lv_obj_t **bar_out,
-                             const char *title, int y, lv_color_t accent) {
+                            const char *title, int y, lv_color_t accent) {
     lv_obj_t *card = lv_obj_create(parent);
     lv_obj_set_size(card, 360, 80);
-    lv_obj_set_pos(card, 53, y);     // posición absoluta — evita scroll
+    lv_obj_set_pos(card, 53, y);
     lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(card, C_BG2, 0);
     lv_obj_set_style_radius(card, 22, 0);
@@ -280,11 +266,21 @@ static void make_stat_card(lv_obj_t *parent, lv_obj_t **bar_out,
 // ═══════════════════════════════════════════════════════════════════════════
 // SISTEMA PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════
-void ui_create_main_system() {
-    lv_obj_t *scr = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(scr, C_BLACK, 0);
+void ui_create_overlays() {
+    // Sleep overlay — creado antes del wizard y del shell
+    // para que funcione desde el primer momento
+    sleep_overlay = lv_obj_create(lv_layer_sys());
+    lv_obj_set_size(sleep_overlay, 466, 466);
+    lv_obj_set_style_bg_color(sleep_overlay, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(sleep_overlay, LV_OPA_0, 0);
+    lv_obj_clear_flag(sleep_overlay, LV_OBJ_FLAG_CLICKABLE);
+}
 
-    tv = lv_tileview_create(scr);
+void ui_create_main_system() {
+    shell_screen = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(shell_screen, C_BLACK, 0);
+
+    tv = lv_tileview_create(shell_screen);
     lv_obj_set_size(tv, 466, 466);
     lv_obj_set_style_bg_color(tv, C_BLACK, 0);
     lv_obj_set_style_bg_opa(tv, LV_OPA_COVER, 0);
@@ -299,14 +295,10 @@ void ui_create_main_system() {
     lv_obj_t *tiles[] = {t_notifs, t_settings, t_home, t_widgets, t_menu};
     for (auto *t : tiles) {
         lv_obj_set_style_bg_color(t, C_BLACK, 0);
-        lv_obj_clear_flag(t, LV_OBJ_FLAG_SCROLLABLE); // ← FIX scroll
+        lv_obj_clear_flag(t, LV_OBJ_FLAG_SCROLLABLE);
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // HOME — inspirado en Galaxy Watch Fitness arc
-    // ─────────────────────────────────────────────────────────────────────
-
-    // Anillo de pasos — 24px, perimetral, desde 12 en punto
+    // ── HOME ──────────────────────────────────────────────────────────────
     steps_arc = lv_arc_create(t_home);
     lv_obj_set_size(steps_arc, 450, 450);
     lv_arc_set_bg_angles(steps_arc, 0, 359);
@@ -322,21 +314,18 @@ void ui_create_main_system() {
     lv_obj_align(steps_arc, LV_ALIGN_CENTER, 0, 0);
     lv_obj_clear_flag(steps_arc, LV_OBJ_FLAG_CLICKABLE);
 
-    // Hora
     time_label = lv_label_create(t_home);
     lv_obj_set_style_text_font(time_label, &lv_font_montserrat_48_lat, 0);
     lv_obj_set_style_text_color(time_label, C_TEXT, 0);
     lv_label_set_text(time_label, "00:00");
     lv_obj_align(time_label, LV_ALIGN_TOP_MID, 0, 68);
 
-    // Pasos (num grande + objetivo pequeño, estilo Galaxy Watch)
     steps_label = lv_label_create(t_home);
     lv_obj_set_style_text_font(steps_label, &lv_font_montserrat_14_lat, 0);
     lv_obj_set_style_text_color(steps_label, C_DIM, 0);
     lv_label_set_text(steps_label, "0 / 5,000");
     lv_obj_align(steps_label, LV_ALIGN_BOTTOM_MID, 0, -62);
 
-    // Sprite
     pkm_img = lv_img_create(t_home);
     lv_img_set_src(pkm_img, &cosmog_sprite);
     lv_obj_set_size(pkm_img, 200, 200);
@@ -345,8 +334,6 @@ void ui_create_main_system() {
     lv_img_set_pivot(pkm_img, 100, 100);
     start_breathe_anim(pkm_img);
 
-    // Indicadores de estado — dos puntos circulares bajo el sprite
-    // Cambian de color según el estado (verde bien, rojo alerta)
     dot_hunger = lv_obj_create(t_home);
     lv_obj_set_size(dot_hunger, 14, 14);
     lv_obj_set_style_radius(dot_hunger, LV_RADIUS_CIRCLE, 0);
@@ -361,16 +348,13 @@ void ui_create_main_system() {
     lv_obj_set_style_border_width(dot_happy, 0, 0);
     lv_obj_align(dot_happy, LV_ALIGN_CENTER, 20, 120);
 
-    // Bateria
     batt_home_label = lv_label_create(t_home);
     lv_obj_set_style_text_font(batt_home_label, &lv_font_montserrat_12_lat, 0);
     lv_obj_set_style_text_color(batt_home_label, C_DIM, 0);
     lv_label_set_text(batt_home_label, "100%");
     lv_obj_align(batt_home_label, LV_ALIGN_BOTTOM_MID, 0, -44);
 
-    // ─────────────────────────────────────────────────────────────────────
-    // AJUSTES RAPIDOS — botones circulares estilo Galaxy Watch
-    // ─────────────────────────────────────────────────────────────────────
+    // ── AJUSTES RAPIDOS ───────────────────────────────────────────────────
     batt_label = lv_label_create(t_settings);
     lv_obj_set_style_text_font(batt_label, &lv_font_montserrat_32_lat, 0);
     lv_obj_set_style_text_color(batt_label, C_TEXT, 0);
@@ -383,7 +367,6 @@ void ui_create_main_system() {
     lv_obj_set_style_text_color(batt_sub, C_DIM, 0);
     lv_obj_align(batt_sub, LV_ALIGN_TOP_MID, 0, 94);
 
-    // Grid 2×2 de botones circulares
     lv_obj_t *grid = lv_obj_create(t_settings);
     lv_obj_set_size(grid, 360, 260);
     lv_obj_align(grid, LV_ALIGN_BOTTOM_MID, 0, -24);
@@ -397,16 +380,14 @@ void ui_create_main_system() {
                                  LV_FLEX_ALIGN_CENTER);
 
     struct { const char *ico; const char *lbl; lv_color_t c; lv_event_cb_t cb; } qs[] = {
-        { "DND",    "No Molestar", lv_color_hex(0x252535), nullptr    },
-        { "SOL",    "Brillo",      lv_color_hex(0x3A2E08), nullptr    },
-        { "LUZ",    "Linterna",    lv_color_hex(0x12243A), fl_on_cb   },
-        { "ECO",    "Eco",         lv_color_hex(0x0E2418), nullptr    },
+        { "DND", "No Molestar", lv_color_hex(0x252535), nullptr  },
+        { "SOL", "Brillo",      lv_color_hex(0x3A2E08), nullptr  },
+        { "LUZ", "Linterna",    lv_color_hex(0x12243A), fl_on_cb },
+        { "ECO", "Eco",         lv_color_hex(0x0E2418), nullptr  },
     };
     for (auto &q : qs) make_round_btn(grid, q.ico, q.lbl, q.c, q.cb);
 
-    // ─────────────────────────────────────────────────────────────────────
-    // STATS — fijo, sin scroll
-    // ─────────────────────────────────────────────────────────────────────
+    // ── STATS ─────────────────────────────────────────────────────────────
     level_label = lv_label_create(t_widgets);
     lv_obj_set_style_text_font(level_label, &lv_font_montserrat_48_lat, 0);
     lv_obj_set_style_text_color(level_label, C_RED, 0);
@@ -425,19 +406,22 @@ void ui_create_main_system() {
     lv_obj_set_style_text_color(pname, C_BLUE_M, 0);
     lv_obj_set_pos(pname, 195, 100);
 
-    // Tarjetas (posición absoluta → no puede scrollear)
     make_stat_card(t_widgets, &hunger_bar, "HAMBRE",  136, C_RED_D);
     make_stat_card(t_widgets, &happy_bar,  "AMISTAD", 228, C_BLUE_M);
 
-    // ─────────────────────────────────────────────────────────────────────
-    // MENU — grid circular tipo Galaxy Watch launcher
-    // ─────────────────────────────────────────────────────────────────────
-    // 4 apps en círculo + botón central
-    struct { const char *ico; const char *lbl; lv_color_t c; int x; int y; } apps[] = {
-        { "PKD",  "PokéDex",  lv_color_hex(0x5C1A18),  -105, -80  },
-        { "FIT",  "Fitness",  lv_color_hex(0x1A3A2A),   105, -80  },
-        { "POM",  "Pomodoro", lv_color_hex(0x3A2808),  -105,  80  },
-        { "AJU",  "Ajustes",  lv_color_hex(0x1A2840),   105,  80  },
+    // ── MENU ──────────────────────────────────────────────────────────────
+    // app_id + x/y en la misma struct — una sola definición
+    struct {
+        const char  *ico;
+        const char  *lbl;
+        lv_color_t   c;
+        const char  *app_id;
+        int          x, y;
+    } apps[] = {
+        { "PKD", "PokeDex",  lv_color_hex(0x5C1A18), "pokedex",  -105, -80 },
+        { "FIT", "Fitness",  lv_color_hex(0x1A3A2A), "fitness",   105, -80 },
+        { "POM", "Pomodoro", lv_color_hex(0x3A2808), "pomodoro", -105,  80 },
+        { "AJU", "Ajustes",  lv_color_hex(0x1A2840), nullptr,     105,  80 },
     };
     for (auto &a : apps) {
         lv_obj_t *btn = lv_btn_create(t_menu);
@@ -449,6 +433,11 @@ void ui_create_main_system() {
         lv_obj_set_style_border_opa(btn, LV_OPA_30, 0);
         lv_obj_set_style_shadow_width(btn, 0, 0);
         lv_obj_align(btn, LV_ALIGN_CENTER, a.x, a.y);
+        if (a.app_id) {
+            lv_obj_add_event_cb(btn, [](lv_event_t *e) {
+                app_manager_launch((const char *)lv_event_get_user_data(e));
+            }, LV_EVENT_CLICKED, (void *)a.app_id);
+        }
         lv_obj_t *l1 = lv_label_create(btn);
         lv_label_set_text(l1, a.ico);
         lv_obj_set_style_text_font(l1, &lv_font_montserrat_12_lat, 0);
@@ -460,7 +449,7 @@ void ui_create_main_system() {
         lv_obj_set_style_text_color(l2, C_DIM, 0);
         lv_obj_align(l2, LV_ALIGN_CENTER, 0, 8);
     }
-    // Botón central — acceso rápido al vPet
+
     lv_obj_t *center_btn = lv_btn_create(t_menu);
     lv_obj_set_size(center_btn, 72, 72);
     lv_obj_set_style_radius(center_btn, LV_RADIUS_CIRCLE, 0);
@@ -473,9 +462,7 @@ void ui_create_main_system() {
     lv_obj_set_style_text_color(cl, C_DIM, 0);
     lv_obj_center(cl);
 
-    // ─────────────────────────────────────────────────────────────────────
-    // NOTIFICACIONES — tarjeta pill estilo Galaxy Watch
-    // ─────────────────────────────────────────────────────────────────────
+    // ── NOTIFICACIONES ────────────────────────────────────────────────────
     lv_obj_t *notif_card = lv_obj_create(t_notifs);
     lv_obj_set_size(notif_card, 340, 80);
     lv_obj_center(notif_card);
@@ -497,31 +484,26 @@ void ui_create_main_system() {
     lv_obj_set_style_text_color(notif_txt, C_DIM, 0);
     lv_obj_align(notif_txt, LV_ALIGN_LEFT_MID, 38, 0);
 
-    // ─────────────────────────────────────────────────────────────────────
-    // CAPAS SISTEMA
-    // ─────────────────────────────────────────────────────────────────────
+    // ── CAPAS SISTEMA ─────────────────────────────────────────────────────
     flashlight_obj = lv_obj_create(lv_layer_sys());
     lv_obj_set_size(flashlight_obj, 466, 466);
     lv_obj_set_style_bg_color(flashlight_obj, lv_color_white(), 0);
     lv_obj_add_flag(flashlight_obj, LV_OBJ_FLAG_HIDDEN | LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(flashlight_obj, fl_off_cb, LV_EVENT_CLICKED, NULL);
 
-    sleep_overlay = lv_obj_create(lv_layer_sys());
-    lv_obj_set_size(sleep_overlay, 466, 466);
-    lv_obj_set_style_bg_color(sleep_overlay, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(sleep_overlay, LV_OPA_0, 0);
-    lv_obj_clear_flag(sleep_overlay, LV_OBJ_FLAG_CLICKABLE);
-
     lv_obj_update_layout(tv);
     lv_obj_set_tile_id(tv, 1, 1, LV_ANIM_OFF);
     ui_update_pkm_image();
     ui_update_vpet();
-    lv_scr_load_anim(scr, LV_SCR_LOAD_ANIM_FADE_ON, 600, 0, true);
+    lv_scr_load_anim(shell_screen, LV_SCR_LOAD_ANIM_FADE_ON, 600, 0, true);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // API PÚBLICA
 // ═══════════════════════════════════════════════════════════════════════════
+lv_obj_t* ui_get_shell_screen() {
+    return shell_screen;
+}
 
 void ui_set_sleep_mode(bool s) {
     lv_obj_set_style_bg_opa(sleep_overlay, s ? LV_OPA_COVER : LV_OPA_0, 0);
@@ -536,15 +518,12 @@ void ui_update_steps() {
 
     int pct = (int)((myStatus.steps * 100ULL) / myStatus.step_goal);
     if (pct > 100) pct = 100;
-
     lv_arc_set_value(steps_arc, pct);
 
-    // Color dinámico del arco
-    lv_color_t col = (pct < 50)  ? C_ARC_LOW  :
-                     (pct < 100) ? C_ARC_MID  : C_ARC_DONE;
+    lv_color_t col = (pct < 50)  ? C_ARC_LOW :
+                     (pct < 100) ? C_ARC_MID : C_ARC_DONE;
     lv_obj_set_style_arc_color(steps_arc, col, LV_PART_INDICATOR);
 
-    // Label "pasos / objetivo"
     char steps_str[24], goal_str[12];
     if (myStatus.steps >= 1000)
         snprintf(steps_str, sizeof(steps_str), "%.1fk", myStatus.steps / 1000.0f);
@@ -574,7 +553,6 @@ void ui_update_vpet() {
     if (happy_bar)
         lv_bar_set_value(happy_bar, myStatus.happiness, LV_ANIM_ON);
 
-    // Puntos de estado: verde si bien, rojo si alerta
     if (dot_hunger) {
         lv_color_t c = (myStatus.hunger < 30) ? C_RED : C_BLUE_M;
         lv_obj_set_style_bg_color(dot_hunger, c, 0);
