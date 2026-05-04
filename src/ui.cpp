@@ -434,7 +434,7 @@ void ui_create_main_system() {
     // ─────────────────────────────────────────────────────────────────────
     // 4 apps en círculo + botón central
     struct { const char *ico; const char *lbl; lv_color_t c; int x; int y; } apps[] = {
-        { "PKD",  "Pokedex",  lv_color_hex(0x5C1A18),  -105, -80  },
+        { "PKD",  "PokéDex",  lv_color_hex(0x5C1A18),  -105, -80  },
         { "FIT",  "Fitness",  lv_color_hex(0x1A3A2A),   105, -80  },
         { "POM",  "Pomodoro", lv_color_hex(0x3A2808),  -105,  80  },
         { "AJU",  "Ajustes",  lv_color_hex(0x1A2840),   105,  80  },
